@@ -1,16 +1,135 @@
 pragma solidity ^0.4.17;
 
-contract CardBase {
+/**
+    cliff maid shift sleep original miracle salt miss path load echo guitar
+*/
 
-    Card[] cards;
+contract CardBase {
+    Card[] public cards;
+    Game[] public games;
+
+    uint dnaModulus = 10 ** 16;
+
+    function countCards() public view returns (uint) {
+        return cards.length;
+    }
 
     /// @dev A mapping from card IDs to the address that owns them. All cards have
     ///  some valid owner address, even gen0 cats are created with a non-zero owner.
     mapping (uint256 => address) public cardIndexToOwner;
-
+    mapping (uint256 => Game) public gameIdToGame;
     // @dev A mapping from owner address to count of tokens that address owns.
     //  Used internally inside balanceOf() to resolve ownership count.
     mapping (address => uint256) ownershipTokenCount;
+
+    struct Game {
+        address playerA;
+        address playerB;
+        address lastPlayer;
+        address winner;
+        uint currentRound;
+        uint round1PlayerAPoints;
+        uint round2PlayerAPoints;
+        uint round3PlayerAPoints;
+        uint round1PlayerBPoints;
+        uint round2PlayerBPoints;
+        uint round3PlayerBPoints;
+    }
+
+    function startGame() public {
+        Game memory game = Game(msg.sender, 0x0, msg.sender, 0x0, 0, 0, 0, 0, 0, 0, 0);
+
+        uint gameId = games.push(game) - 1;
+
+        gameIdToGame[gameId] = game;
+    }
+
+    
+
+    modifier isMyCard(uint cardId) {
+        require(
+            cardIndexToOwner[cardId] == msg.sender,
+            "This card does not belong to you."
+        );
+        _;
+    }
+
+    modifier nextTurnIsMine(uint gameId) {
+        require(
+            games[gameId].lastPlayer != msg.sender,
+            "This is not your turn."
+        );
+        _;
+    }
+
+    function _nextRound(Game storage game) internal {
+        game.currentRound = game.currentRound + 1;
+    }
+
+    modifier partOfTheGame(uint gameId) {
+        Game storage game = games[gameId];
+
+        uint notTwo = 0;
+
+        if (game.playerA != msg.sender) {
+            notTwo++;
+        }
+
+        if (game.playerB != msg.sender) {
+            notTwo++;
+        }
+
+        require(
+            notTwo != 2,
+            "You are not part of the game!"
+        );
+        _;
+    }
+
+    function nextRound(uint gameId) public nextTurnIsMine(gameId) partOfTheGame(gameId) {
+        Game storage game = games[gameId];
+
+        _nextRound(game);
+    }
+
+    function useCardInGameOrJoinGame(uint gameId, uint cardId)
+    public
+    isMyCard(cardId)
+    nextTurnIsMine(gameId) {
+        Game storage game = games[gameId];
+        Card storage card = cards[cardId];
+
+        game.playerB = msg.sender;
+        game.lastPlayer = msg.sender;
+
+        if (game.playerB == msg.sender) {
+            if (game.currentRound == 0) {
+                game.round1PlayerAPoints = game.round1PlayerBPoints + card.power;
+            }
+
+            if (game.currentRound == 1) {
+                game.round1PlayerAPoints = game.round2PlayerBPoints + card.power;
+            }
+
+            if (game.currentRound == 2) {
+                game.round1PlayerAPoints = game.round2PlayerBPoints + card.power;
+            }
+        }
+
+        if (game.playerA == msg.sender) {
+            if (game.currentRound == 0) {
+                game.round1PlayerAPoints = game.round1PlayerAPoints + card.power;
+            }
+
+            if (game.currentRound == 1) {
+                game.round1PlayerAPoints = game.round2PlayerAPoints + card.power;
+            }
+
+            if (game.currentRound == 2) {
+                game.round1PlayerAPoints = game.round2PlayerAPoints + card.power;
+            }
+        }
+    }
 
     struct Card {
         // The ID of the parents of this card, set to 0 for gen0 cats.
@@ -35,11 +154,6 @@ contract CardBase {
         // numbers of their parents, plus one.
         // (i.e. max(matron.generation, sire.generation) + 1)
         uint16 generation;
-    }
-    
-    modifier isMyCard(uint cardId) {
-        require (cardIndexToOwner[cardId] == msg.sender);
-        _;
     }
 
     modifier isBetterPower(uint cardId, uint power) {
@@ -72,10 +186,10 @@ contract CardBase {
     }
 
     // everyone can get 10 cards for free
-    function createNewCard() external {
-        require(ownershipTokenCount[msg.sender] < 10);
+    function createNewCard() public {
+        require(ownershipTokenCount[msg.sender] < 10, "You already have 10 cards");
 
-        _createCard(1, "asdasdasd", 1, msg.sender);
+        _createCard(1, "NoName", 1, msg.sender);
     }
 
     function _mutate(uint _cardId, uint positiveNegativePoints) internal {
@@ -87,10 +201,15 @@ contract CardBase {
         card.dna = card.dna - card.dna % 100 + positiveNegativePoints;
     }
 
-     function getSomeRandomDna() private view returns (uint) {
-        uint random_number = uint(blockhash(block.number-1))%10 + 1;
+    function getSomeRandomDna() public view returns (uint) {
+        
+        uint random_number = uint(blockhash(block.number-1)) % dnaModulus + 1;
 
         return random_number;
+    }
+
+    function getLastCard() public view returns (uint) {
+        return cards[cards.length - 1].dna;
     }
 
     /// @dev An internal method that creates a new kitty and stores it. This
@@ -106,7 +225,8 @@ contract CardBase {
         internal
         returns (uint)
     {
-        Card memory _card = Card(_power, _name, getSomeRandomDna(), _generation);
+        uint dna = getSomeRandomDna();
+        Card memory _card = Card(_power, _name, dna, _generation);
 
         uint256 newCardId = cards.push(_card) - 1;
 
