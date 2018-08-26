@@ -10,6 +10,8 @@ contract CardBase {
 
     uint dnaModulus = 10 ** 16;
 
+    event GameCreated(address indexed _from, uint256 _gameId, Game _game);
+
     function countCards() public view returns (uint) {
         return cards.length;
     }
@@ -42,9 +44,9 @@ contract CardBase {
         uint gameId = games.push(game) - 1;
 
         gameIdToGame[gameId] = game;
-    }
 
-    
+        emit GameCreated(msg.sender, gameId, game);
+    }
 
     modifier isMyCard(uint cardId) {
         require(
@@ -187,7 +189,7 @@ contract CardBase {
 
     // everyone can get 10 cards for free
     function createNewCard() public {
-        require(ownershipTokenCount[msg.sender] < 10, "You already have 10 cards");
+        // require(ownershipTokenCount[msg.sender] < 10, "You already have 10 cards");
 
         _createCard(1, "NoName", 1, msg.sender);
     }
